@@ -51,7 +51,9 @@
         .btn-player { background: #f8f9fa; color: #333; border: 2px solid #ccc; }
         .btn-player.active { background: #dc3545; color: white; border-color: #bd2130; outline: 3px solid #ffc107; }
         
-        /* スパイクの質ボタン */
+        /* ボールを打った場所・スパイクの質ボタン */
+        .btn-attack { background: #e7f1ff; color: #084298; border: 2px solid #9ec5fe; }
+        .btn-attack.active { background: #0d6efd; color: white; border-color: #084298; outline: 3px solid #ffc107; }
         .btn-quality { background: #e0e0e0; color: #333; }
         .btn-quality.active { background: #28a745; color: white; }
         
@@ -100,7 +102,7 @@
 
         /* 履歴・検索・編集エリア */
         .history-card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .history-tools { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 10px 0; }
+        .history-tools { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 10px 0; }
         .history-tools select, .history-tools input {
             width: 100%; padding: 8px; font-size: 13px; border: 1px solid #ced4da; border-radius: 6px; box-sizing: border-box;
         }
@@ -113,7 +115,7 @@
         .btn-history-edit { padding: 5px 9px; font-size: 12px; min-width: 52px; background: #e7f1ff; color: #084298; border: 1px solid #9ec5fe; border-radius: 5px; cursor: pointer; }
         .edit-panel { display: none; border: 2px solid #0d6efd; background: #f8fbff; border-radius: 8px; padding: 10px; margin: 10px 0; }
         .edit-panel.active { display: block; }
-        .edit-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 8px 0; }
+        .edit-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 8px 0; }
         .edit-grid label { font-size: 12px; font-weight: bold; color: #495057; display: flex; flex-direction: column; gap: 4px; }
         .edit-grid select { padding: 8px; font-size: 14px; border: 1px solid #ced4da; border-radius: 6px; }
         .edit-actions { display: flex; gap: 8px; }
@@ -157,8 +159,18 @@
         <div class="btn-group" id="playerButtonsContainer"></div>
     </div>
 
-    <!-- 手順②: コートタップ（自陣） -->
-    <p style="margin:0; font-weight:bold;">2. 自陣コートの落ちた（触った）位置をタップ</p>
+    <div class="controls">
+        <!-- 手順②: ボールを打った場所 -->
+        <p style="margin:0 0 8px 0; font-weight:bold;">2. ボールを打った場所を選択</p>
+        <div class="btn-group">
+            <button class="btn-attack" onclick="selectAttackLocation('レフト', this)">⬅️ レフト</button>
+            <button class="btn-attack" onclick="selectAttackLocation('センター', this)">⬆️ センター</button>
+            <button class="btn-attack" onclick="selectAttackLocation('ライト', this)">➡️ ライト</button>
+        </div>
+    </div>
+
+    <!-- 手順③: コートタップ（自陣） -->
+    <p style="margin:0; font-weight:bold;">3. 自陣コートの落ちた（触った）位置をタップ</p>
     <div class="court-container" style="margin-top: 20px; margin-bottom: 10px;">
         <div class="court-figure">
             <div class="net-label">↑ ネット側</div>
@@ -178,8 +190,8 @@
     </div>
 
     <div class="controls">
-        <!-- 手順③: スパイクの質（トリガー） -->
-        <p style="margin:5px 0 8px 0; font-weight:bold;">3. スパイクの質を選択して記録完了</p>
+        <!-- 手順④: スパイクの質（トリガー） -->
+        <p style="margin:5px 0 8px 0; font-weight:bold;">4. スパイクの質を選択して記録完了</p>
         <div class="btn-group">
             <button class="btn-quality" onclick="selectQuality('強打')">💥 強打</button>
             <button class="btn-quality" onclick="selectQuality('ハーフ')">🎯 ハーフ</button>
@@ -195,6 +207,7 @@
                 <tr>
                     <th>選手名/特徴</th>
                     <th>スパイク総数</th>
+                    <th>主な打った場所</th>
                     <th>質の割合（強打 / ハーフ / フェ）</th>
                     <th>自陣の主な被弾コース（上位2箇所）</th>
                 </tr>
@@ -210,8 +223,11 @@
             <select id="filterPlayer" onchange="renderLogs()">
                 <option value="">選手：すべて</option>
             </select>
+            <select id="filterAttack" onchange="renderLogs()">
+                <option value="">打った場所：すべて</option>
+            </select>
             <select id="filterZone" onchange="renderLogs()">
-                <option value="">コース：すべて</option>
+                <option value="">落下コース：すべて</option>
             </select>
             <select id="filterQuality" onchange="renderLogs()">
                 <option value="">質：すべて</option>
@@ -228,7 +244,10 @@
                 <label>選手
                     <select id="editPlayer"></select>
                 </label>
-                <label>コース
+                <label>打った場所
+                    <select id="editAttack"></select>
+                </label>
+                <label>落下コース
                     <select id="editZone"></select>
                 </label>
                 <label>質
@@ -252,13 +271,14 @@
                         <th>No.</th>
                         <th>時刻</th>
                         <th>選手</th>
-                        <th>コース</th>
+                        <th>打った場所</th>
+                        <th>落下コース</th>
                         <th>質</th>
                         <th>操作</th>
                     </tr>
                 </thead>
                 <tbody id="historyTableBody">
-                    <tr><td colspan="6" style="color:gray;">ここに記録データが表示されます</td></tr>
+                    <tr><td colspan="7" style="color:gray;">ここに記録データが表示されます</td></tr>
                 </tbody>
             </table>
         </div>
@@ -269,17 +289,19 @@
     const STORAGE_KEY = 'spikeAnalysis_savedData_v1';
 
     let currentWriterPlayer = "";
+    let currentAttackLocation = "";
     let selectedZoneNumber = "";
     let playerData = {};
     let records = [];
     let lastRemovedRecord = null;
     let lastRemovedIndex = null;
     let editingRecordIndex = null;
+    const ATTACK_OPTIONS = ['レフト', 'センター', 'ライト'];
     const ZONE_OPTIONS = ['FL', 'FC', 'FR', 'ML', 'MC', 'MR', 'BL', 'BC', 'BR'];
     const QUALITY_OPTIONS = ['強打', 'ハーフ', 'フェイント'];
 
     function makeEmptyPlayerData() {
-        return { total: 0, strong: 0, half: 0, feint: 0, zones: {} };
+        return { total: 0, strong: 0, half: 0, feint: 0, zones: {}, attackLocations: {} };
     }
 
     function updateNavMessage(msg) {
@@ -381,23 +403,47 @@
 
     function selectPlayer(pName, element) {
         document.querySelectorAll('.btn-player').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.btn-attack').forEach(b => b.classList.remove('active'));
         element.classList.add('active');
         currentWriterPlayer = pName;
-        clearCourtSelection();
+        currentAttackLocation = "";
         selectedZoneNumber = "";
+        clearCourtSelection();
+        document.getElementById('volleyballCourt').classList.remove('selectable');
+        updateNavMessage(`選択中: <span>【${escapeHtml(currentWriterPlayer)}】</span> ➔ 2. 【打った場所】 を選択！`);
+    }
+
+    function selectAttackLocation(location, element) {
+        if (!currentWriterPlayer) {
+            alert('先にスパイカーを選んでください。');
+            return;
+        }
+
+        document.querySelectorAll('.btn-attack').forEach(b => b.classList.remove('active'));
+        element.classList.add('active');
+        currentAttackLocation = location;
+        selectedZoneNumber = "";
+        clearCourtSelection();
         document.getElementById('volleyballCourt').classList.add('selectable');
-        updateNavMessage(`選択中: <span>【${escapeHtml(currentWriterPlayer)}】</span> ➔ 2. 自陣の 【コース位置】 をタップ！`);
+        updateNavMessage(`選択中: <span>【${escapeHtml(currentWriterPlayer)}】➔【打った場所 ${currentAttackLocation}】</span> ➔ 3. 自陣の 【落下コース】 をタップ！`);
     }
 
     document.getElementById('volleyballCourt').addEventListener('click', function(e) {
         const zoneElement = e.target.closest('.zone');
         if (!zoneElement) return;
-        if (!currentWriterPlayer) return;
+        if (!currentWriterPlayer) {
+            alert('先にスパイカーを選んでください。');
+            return;
+        }
+        if (!currentAttackLocation) {
+            alert('先にボールを打った場所を選んでください。');
+            return;
+        }
 
         clearCourtSelection();
         zoneElement.classList.add('active');
         selectedZoneNumber = zoneElement.getAttribute('data-zone');
-        updateNavMessage(`選択中: <span>【${escapeHtml(currentWriterPlayer)}】➔【自陣 ${selectedZoneNumber}】</span> ➔ 3. 【スパイクの質】 を選択！`);
+        updateNavMessage(`選択中: <span>【${escapeHtml(currentWriterPlayer)}】➔【${currentAttackLocation}】➔【自陣 ${selectedZoneNumber}】</span> ➔ 4. 【スパイクの質】 を選択！`);
     });
 
     function clearCourtSelection() {
@@ -405,17 +451,21 @@
     }
 
     function selectQuality(quality) {
-        if (!currentWriterPlayer || !selectedZoneNumber) return;
+        if (!currentWriterPlayer || !currentAttackLocation || !selectedZoneNumber) {
+            alert('スパイカー、打った場所、落下コースを順に選んでください。');
+            return;
+        }
 
         const now = new Date();
         const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
 
-        updateSpikeData(currentWriterPlayer, quality, selectedZoneNumber);
+        updateSpikeData(currentWriterPlayer, quality, selectedZoneNumber, currentAttackLocation);
 
         records.push({
             timestamp: now.toISOString(),
             time: timeStr,
             player: currentWriterPlayer,
+            attackLocation: currentAttackLocation,
             zone: selectedZoneNumber,
             quality: quality
         });
@@ -425,8 +475,9 @@
         renderLogs();
 
         currentWriterPlayer = "";
+        currentAttackLocation = "";
         selectedZoneNumber = "";
-        document.querySelectorAll('.btn-player, .btn-quality').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.btn-player, .btn-attack, .btn-quality').forEach(b => b.classList.remove('active'));
         document.getElementById('volleyballCourt').classList.remove('selectable');
         clearCourtSelection();
         updateNavMessage("記録完了！ 次の攻撃: <span>【1. スパイカー】</span> を選択してください");
@@ -445,11 +496,12 @@
         renderLogs();
         refreshStatsTable();
         clearCourtSelection();
-        document.querySelectorAll('.btn-player, .btn-quality').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.btn-player, .btn-attack, .btn-quality').forEach(b => b.classList.remove('active'));
         currentWriterPlayer = "";
+        currentAttackLocation = "";
         selectedZoneNumber = "";
         document.getElementById('volleyballCourt').classList.remove('selectable');
-        updateNavMessage(`直前の記録を取り消しました: <span>【${escapeHtml(lastRemovedRecord.player)}】自陣 ${lastRemovedRecord.zone}（${lastRemovedRecord.quality}）</span>`);
+        updateNavMessage(`直前の記録を取り消しました: <span>【${escapeHtml(lastRemovedRecord.player)}】${getAttackLocationLabel(lastRemovedRecord)} → 自陣 ${lastRemovedRecord.zone}（${lastRemovedRecord.quality}）</span>`);
         saveData();
     }
 
@@ -461,7 +513,7 @@
 
         const target = records[index];
         const ok = confirm(`この記録を削除しますか？
-【${target.player}】 自陣 ${target.zone}（${target.quality}） [${target.time}]`);
+【${target.player}】 ${getAttackLocationLabel(target)} → 自陣 ${target.zone}（${target.quality}） [${target.time}]`);
         if (!ok) return;
 
         lastRemovedIndex = index;
@@ -470,11 +522,12 @@
         renderLogs();
         refreshStatsTable();
         clearCourtSelection();
-        document.querySelectorAll('.btn-player, .btn-quality').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.btn-player, .btn-attack, .btn-quality').forEach(b => b.classList.remove('active'));
         currentWriterPlayer = "";
+        currentAttackLocation = "";
         selectedZoneNumber = "";
         document.getElementById('volleyballCourt').classList.remove('selectable');
-        updateNavMessage(`記録を削除しました: <span>【${escapeHtml(lastRemovedRecord.player)}】自陣 ${lastRemovedRecord.zone}（${lastRemovedRecord.quality}）</span>`);
+        updateNavMessage(`記録を削除しました: <span>【${escapeHtml(lastRemovedRecord.player)}】${getAttackLocationLabel(lastRemovedRecord)} → 自陣 ${lastRemovedRecord.zone}（${lastRemovedRecord.quality}）</span>`);
         saveData();
     }
 
@@ -491,7 +544,7 @@
         rebuildPlayerDataFromRecords();
         renderLogs();
         refreshStatsTable();
-        updateNavMessage(`取り消した記録を戻しました: <span>【${escapeHtml(lastRemovedRecord.player)}】自陣 ${lastRemovedRecord.zone}（${lastRemovedRecord.quality}）</span>`);
+        updateNavMessage(`取り消した記録を戻しました: <span>【${escapeHtml(lastRemovedRecord.player)}】${getAttackLocationLabel(lastRemovedRecord)} → 自陣 ${lastRemovedRecord.zone}（${lastRemovedRecord.quality}）</span>`);
         lastRemovedRecord = null;
         lastRemovedIndex = null;
         saveData();
@@ -516,13 +569,17 @@
             if (r.quality === 'フェイント') p.feint++;
             if (!p.zones[r.zone]) p.zones[r.zone] = 0;
             p.zones[r.zone]++;
+            const attack = getAttackLocationLabel(r);
+            if (!p.attackLocations) p.attackLocations = {};
+            if (!p.attackLocations[attack]) p.attackLocations[attack] = 0;
+            p.attackLocations[attack]++;
         });
 
         playerData = rebuilt;
         renderPlayerButtons(Object.keys(playerData));
     }
 
-    function updateSpikeData(player, quality, zoneKey) {
+    function updateSpikeData(player, quality, zoneKey, attackLocation) {
         if (!playerData[player]) playerData[player] = makeEmptyPlayerData();
         const p = playerData[player];
 
@@ -530,8 +587,13 @@
         if (quality === '強打') p.strong++;
         if (quality === 'ハーフ') p.half++;
         if (quality === 'フェイント') p.feint++;
+        if (!p.zones) p.zones = {};
         if (!p.zones[zoneKey]) p.zones[zoneKey] = 0;
         p.zones[zoneKey]++;
+        if (!p.attackLocations) p.attackLocations = {};
+        const attack = attackLocation || '未記録';
+        if (!p.attackLocations[attack]) p.attackLocations[attack] = 0;
+        p.attackLocations[attack]++;
         refreshStatsTable();
     }
 
@@ -544,7 +606,7 @@
 
             if (data.total === 0) {
                 const row = document.createElement('tr');
-                row.innerHTML = `<td style="font-weight:bold;">${escapeHtml(pName)}</td><td>0 回</td><td>-</td><td>-</td>`;
+                row.innerHTML = `<td style="font-weight:bold;">${escapeHtml(pName)}</td><td>0 回</td><td>-</td><td>-</td><td>-</td>`;
                 tbody.appendChild(row);
                 return;
             }
@@ -552,22 +614,34 @@
             const strongPct = Math.round((data.strong / data.total) * 100);
             const halfPct = Math.round((data.half / data.total) * 100);
             const feintPct = Math.round((data.feint / data.total) * 100);
-            const sortedZones = Object.keys(data.zones).sort((a, b) => data.zones[b] - data.zones[a]);
+            const zones = data.zones || {};
+            const attackLocations = data.attackLocations || {};
+            const sortedZones = Object.keys(zones).sort((a, b) => zones[b] - zones[a]);
+            const sortedAttacks = Object.keys(attackLocations).sort((a, b) => attackLocations[b] - attackLocations[a]);
 
             let topCourses = "-";
             if (sortedZones.length > 0) {
-                topCourses = sortedZones.slice(0, 2).map(z => `${z}(${data.zones[z]})`).join(', ');
+                topCourses = sortedZones.slice(0, 2).map(z => `${z}(${zones[z]})`).join(', ');
+            }
+            let topAttacks = "-";
+            if (sortedAttacks.length > 0) {
+                topAttacks = sortedAttacks.slice(0, 2).map(a => `${a}(${attackLocations[a]})`).join(', ');
             }
 
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td style="font-weight:bold; padding:8px 0;">${escapeHtml(pName)}</td>
                 <td><strong>${data.total}</strong> 回</td>
+                <td style="color:#084298; font-weight:bold;"><small>${topAttacks}</small></td>
                 <td><small>強:${strongPct}%/ハ:${halfPct}%/フェ:${feintPct}%</small></td>
                 <td style="color:#bd2130; font-weight:bold;"><small>${topCourses}</small></td>
             `;
             tbody.appendChild(row);
         });
+    }
+
+    function getAttackLocationLabel(record) {
+        return record && record.attackLocation ? record.attackLocation : '未記録';
     }
 
     function getAllPlayerNames() {
@@ -578,11 +652,13 @@
 
     function populateHistoryFilters() {
         const playerSelect = document.getElementById('filterPlayer');
+        const attackSelect = document.getElementById('filterAttack');
         const zoneSelect = document.getElementById('filterZone');
         const qualitySelect = document.getElementById('filterQuality');
-        if (!playerSelect || !zoneSelect || !qualitySelect) return;
+        if (!playerSelect || !attackSelect || !zoneSelect || !qualitySelect) return;
 
         const currentPlayer = playerSelect.value;
+        const currentAttack = attackSelect.value;
         const currentZone = zoneSelect.value;
         const currentQuality = qualitySelect.value;
 
@@ -595,7 +671,16 @@
         });
         playerSelect.value = getAllPlayerNames().includes(currentPlayer) ? currentPlayer : '';
 
-        zoneSelect.innerHTML = '<option value="">コース：すべて</option>';
+        attackSelect.innerHTML = '<option value="">打った場所：すべて</option>';
+        ATTACK_OPTIONS.forEach(attack => {
+            const opt = document.createElement('option');
+            opt.value = attack;
+            opt.textContent = attack;
+            attackSelect.appendChild(opt);
+        });
+        attackSelect.value = ATTACK_OPTIONS.includes(currentAttack) ? currentAttack : '';
+
+        zoneSelect.innerHTML = '<option value="">落下コース：すべて</option>';
         ZONE_OPTIONS.forEach(zone => {
             const opt = document.createElement('option');
             opt.value = zone;
@@ -616,6 +701,7 @@
 
     function getFilteredRecordIndexes() {
         const filterPlayer = document.getElementById('filterPlayer')?.value || '';
+        const filterAttack = document.getElementById('filterAttack')?.value || '';
         const filterZone = document.getElementById('filterZone')?.value || '';
         const filterQuality = document.getElementById('filterQuality')?.value || '';
         const keyword = (document.getElementById('historySearch')?.value || '').trim().toLowerCase();
@@ -623,11 +709,12 @@
         const indexes = [];
         records.forEach((r, i) => {
             if (filterPlayer && r.player !== filterPlayer) return;
+            if (filterAttack && getAttackLocationLabel(r) !== filterAttack) return;
             if (filterZone && r.zone !== filterZone) return;
             if (filterQuality && r.quality !== filterQuality) return;
 
             if (keyword) {
-                const haystack = `${r.time} ${r.player} ${r.zone} ${r.quality} ${formatDateTimeForCSV(r.timestamp)}`.toLowerCase();
+                const haystack = `${r.time} ${r.player} ${getAttackLocationLabel(r)} ${r.zone} ${r.quality} ${formatDateTimeForCSV(r.timestamp)}`.toLowerCase();
                 if (!haystack.includes(keyword)) return;
             }
 
@@ -653,14 +740,14 @@
 
         if (!records.length) {
             const row = document.createElement('tr');
-            row.innerHTML = '<td colspan="6" style="color:gray;">ここに記録データが表示されます</td>';
+            row.innerHTML = '<td colspan="7" style="color:gray;">ここに記録データが表示されます</td>';
             tbody.appendChild(row);
             return;
         }
 
         if (!indexes.length) {
             const row = document.createElement('tr');
-            row.innerHTML = '<td colspan="6" style="color:gray;">条件に合う記録がありません</td>';
+            row.innerHTML = '<td colspan="7" style="color:gray;">条件に合う記録がありません</td>';
             tbody.appendChild(row);
             return;
         }
@@ -674,6 +761,7 @@
                 <td>${displayNo}</td>
                 <td>${escapeHtml(r.time || '')}</td>
                 <td>${escapeHtml(r.player || '')}</td>
+                <td>${escapeHtml(getAttackLocationLabel(r))}</td>
                 <td>${escapeHtml(r.zone || '')}</td>
                 <td>${escapeHtml(r.quality || '')}</td>
                 <td><button class="btn-history-edit" type="button" onclick="startRecordEdit(${index})">編集</button></td>
@@ -694,6 +782,7 @@
         const panel = document.getElementById('editPanel');
         const label = document.getElementById('editTargetLabel');
         const playerSelect = document.getElementById('editPlayer');
+        const attackSelect = document.getElementById('editAttack');
         const zoneSelect = document.getElementById('editZone');
         const qualitySelect = document.getElementById('editQuality');
 
@@ -705,6 +794,14 @@
             opt.value = name;
             opt.textContent = name;
             playerSelect.appendChild(opt);
+        });
+
+        attackSelect.innerHTML = '';
+        ATTACK_OPTIONS.forEach(attack => {
+            const opt = document.createElement('option');
+            opt.value = attack;
+            opt.textContent = attack;
+            attackSelect.appendChild(opt);
         });
 
         zoneSelect.innerHTML = '';
@@ -724,10 +821,11 @@
         });
 
         playerSelect.value = r.player;
+        attackSelect.value = ATTACK_OPTIONS.includes(getAttackLocationLabel(r)) ? getAttackLocationLabel(r) : 'レフト';
         zoneSelect.value = r.zone;
         qualitySelect.value = r.quality;
 
-        label.textContent = `No.${index + 1} / ${r.time} / 現在: ${r.player}・${r.zone}・${r.quality}`;
+        label.textContent = `No.${index + 1} / ${r.time} / 現在: ${r.player}・${getAttackLocationLabel(r)}・${r.zone}・${r.quality}`;
         panel.classList.add('active');
         panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
@@ -739,11 +837,12 @@
         }
 
         const player = document.getElementById('editPlayer').value;
+        const attackLocation = document.getElementById('editAttack').value;
         const zone = document.getElementById('editZone').value;
         const quality = document.getElementById('editQuality').value;
 
-        if (!player || !zone || !quality) {
-            alert('選手・コース・質をすべて選んでください。');
+        if (!player || !attackLocation || !zone || !quality) {
+            alert('選手・打った場所・落下コース・質をすべて選んでください。');
             return;
         }
 
@@ -751,6 +850,7 @@
         records[editingRecordIndex] = {
             ...oldRecord,
             player: player,
+            attackLocation: attackLocation,
             zone: zone,
             quality: quality,
             editedAt: new Date().toISOString()
@@ -762,7 +862,7 @@
         refreshStatsTable();
         renderLogs();
         cancelRecordEdit(false);
-        updateNavMessage(`記録を修正しました: <span>【${escapeHtml(player)}】自陣 ${zone}（${quality}）</span>`);
+        updateNavMessage(`記録を修正しました: <span>【${escapeHtml(player)}】${attackLocation} → 自陣 ${zone}（${quality}）</span>`);
         saveData();
     }
 
@@ -776,11 +876,12 @@
     }
 
     function buildCSV() {
-        const header = ['日時', '時刻', '選手', '自陣コース', 'スパイクの質'];
+        const header = ['日時', '時刻', '選手', '打った場所', '自陣落下コース', 'スパイクの質'];
         const rows = records.map(r => [
             formatDateTimeForCSV(r.timestamp),
             r.time,
             r.player,
+            getAttackLocationLabel(r),
             r.zone,
             r.quality
         ]);
@@ -832,6 +933,7 @@
 
         localStorage.removeItem(STORAGE_KEY);
         currentWriterPlayer = "";
+        currentAttackLocation = "";
         selectedZoneNumber = "";
         records = [];
         lastRemovedRecord = null;
