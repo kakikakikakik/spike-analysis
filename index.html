@@ -33,6 +33,8 @@
         .data-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
         .btn-small { padding: 9px 10px; font-size: 13px; min-width: 90px; flex: 1; }
         .btn-export { background: #0d6efd; color: white; }
+        .btn-undo { background: #ffc107; color: #333; }
+        .btn-redo { background: #198754; color: white; }
         .btn-reset { background: #dc3545; color: white; }
         .save-status { font-size: 12px; color: #495057; margin-top: 6px; }
 
@@ -86,6 +88,7 @@
             align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 15px;
             cursor: pointer; transition: background 0.1s;
         }
+        .front-zone { background: rgba(255, 255, 255, 0.12); }
         .zone.active { background: #ffc107 !important; color: #333; }
         .zone:active { background: rgba(255, 255, 255, 0.4); color: #333; }
         
@@ -95,9 +98,31 @@
         .stats-table th, .stats-table td { border: 1px solid #ddd; padding: 6px; text-align: center; }
         .stats-table th { background-color: #f8f9fa; }
 
-        /* ログ表示エリア */
-        .log-area { background: white; padding: 15px; border-radius: 8px; height: 120px; overflow-y: auto; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .log-item { padding: 6px 0; border-bottom: 1px solid #eee; font-family: monospace; font-size: 13px; }
+        /* 履歴・検索・編集エリア */
+        .history-card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .history-tools { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 10px 0; }
+        .history-tools select, .history-tools input {
+            width: 100%; padding: 8px; font-size: 13px; border: 1px solid #ced4da; border-radius: 6px; box-sizing: border-box;
+        }
+        .history-count { font-size: 12px; color: #495057; margin: 4px 0 8px; }
+        .history-table-wrap { max-height: 260px; overflow: auto; border: 1px solid #dee2e6; border-radius: 8px; }
+        .history-table { width: 100%; border-collapse: collapse; font-size: 13px; background: white; }
+        .history-table th, .history-table td { border-bottom: 1px solid #e9ecef; padding: 7px; text-align: center; white-space: nowrap; }
+        .history-table th { position: sticky; top: 0; background: #f8f9fa; z-index: 1; }
+        .history-table td:nth-child(3) { text-align: left; }
+        .btn-history-edit { padding: 5px 9px; font-size: 12px; min-width: 52px; background: #e7f1ff; color: #084298; border: 1px solid #9ec5fe; border-radius: 5px; cursor: pointer; }
+        .edit-panel { display: none; border: 2px solid #0d6efd; background: #f8fbff; border-radius: 8px; padding: 10px; margin: 10px 0; }
+        .edit-panel.active { display: block; }
+        .edit-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 8px 0; }
+        .edit-grid label { font-size: 12px; font-weight: bold; color: #495057; display: flex; flex-direction: column; gap: 4px; }
+        .edit-grid select { padding: 8px; font-size: 14px; border: 1px solid #ced4da; border-radius: 6px; }
+        .edit-actions { display: flex; gap: 8px; }
+        .btn-edit-save { background: #0d6efd; color: white; }
+        .btn-edit-cancel { background: #6c757d; color: white; }
+        @media (max-width: 600px) {
+            .history-tools { grid-template-columns: repeat(2, 1fr); }
+            .edit-grid { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
@@ -112,6 +137,8 @@
             <button class="btn-setup" onclick="registerPlayers()">登録</button>
         </div>
         <div class="data-actions">
+            <button class="btn-small btn-undo" onclick="undoLastRecord()">直前取消</button>
+            <button class="btn-small btn-redo" onclick="redoLastUndo()">取消を戻す</button>
             <button class="btn-small btn-export" onclick="exportCSV()">CSV出力</button>
             <button class="btn-small" onclick="copyCSVToClipboard()">CSVコピー</button>
             <button class="btn-small btn-reset" onclick="resetAllData()">全消去</button>
@@ -142,7 +169,7 @@
             </div>
             <div class="court" id="volleyballCourt">
                 <div class="team-side" id="homeSide">
-                    <div class="zone" data-zone="FL">FL</div><div class="zone" data-zone="FC">FC</div><div class="zone" data-zone="FR">FR</div>
+                    <div class="zone front-zone" data-zone="FL">FL</div><div class="zone front-zone" data-zone="FC">FC</div><div class="zone front-zone" data-zone="FR">FR</div>
                     <div class="zone" data-zone="ML">ML</div><div class="zone" data-zone="MC">MC</div><div class="zone" data-zone="MR">MR</div>
                     <div class="zone" data-zone="BL">BL</div><div class="zone" data-zone="BC">BC</div><div class="zone" data-zone="BR">BR</div>
                 </div>
@@ -176,10 +203,64 @@
         </table>
     </div>
 
-    <div>
-        <p style="margin:0 0 5px 0; font-weight:bold;">3. 記録データ履歴</p>
-        <div class="log-area" id="logArea">
-            <div class="log-item" style="color:gray;">ここにタップしたデータが蓄積されます</div>
+    <div class="history-card">
+        <p style="margin:0 0 5px 0; font-weight:bold;">3. 記録データ履歴 <span style="font-size:12px; color:#6c757d; font-weight:normal;">※ 検索・絞り込み・編集できます</span></p>
+
+        <div class="history-tools">
+            <select id="filterPlayer" onchange="renderLogs()">
+                <option value="">選手：すべて</option>
+            </select>
+            <select id="filterZone" onchange="renderLogs()">
+                <option value="">コース：すべて</option>
+            </select>
+            <select id="filterQuality" onchange="renderLogs()">
+                <option value="">質：すべて</option>
+            </select>
+            <input type="search" id="historySearch" placeholder="文字検索" oninput="renderLogs()">
+        </div>
+
+        <div class="history-count" id="historyCount">記録 0 件</div>
+
+        <div class="edit-panel" id="editPanel">
+            <div style="font-weight:bold; margin-bottom:4px;">記録を編集</div>
+            <div id="editTargetLabel" style="font-size:12px; color:#495057;"></div>
+            <div class="edit-grid">
+                <label>選手
+                    <select id="editPlayer"></select>
+                </label>
+                <label>コース
+                    <select id="editZone"></select>
+                </label>
+                <label>質
+                    <select id="editQuality">
+                        <option value="強打">強打</option>
+                        <option value="ハーフ">ハーフ</option>
+                        <option value="フェイント">フェイント</option>
+                    </select>
+                </label>
+            </div>
+            <div class="edit-actions">
+                <button class="btn-small btn-edit-save" onclick="saveRecordEdit()">保存</button>
+                <button class="btn-small btn-edit-cancel" onclick="cancelRecordEdit()">キャンセル</button>
+            </div>
+        </div>
+
+        <div class="history-table-wrap">
+            <table class="history-table">
+                <thead>
+                    <tr>
+                        <th>No.</th>
+                        <th>時刻</th>
+                        <th>選手</th>
+                        <th>コース</th>
+                        <th>質</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="historyTableBody">
+                    <tr><td colspan="6" style="color:gray;">ここに記録データが表示されます</td></tr>
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
@@ -191,6 +272,11 @@
     let selectedZoneNumber = "";
     let playerData = {};
     let records = [];
+    let lastRemovedRecord = null;
+    let lastRemovedIndex = null;
+    let editingRecordIndex = null;
+    const ZONE_OPTIONS = ['FL', 'FC', 'FR', 'ML', 'MC', 'MR', 'BL', 'BC', 'BR'];
+    const QUALITY_OPTIONS = ['強打', 'ハーフ', 'フェイント'];
 
     function makeEmptyPlayerData() {
         return { total: 0, strong: 0, half: 0, feint: 0, zones: {} };
@@ -238,6 +324,9 @@
             const payload = JSON.parse(raw);
             playerData = payload.playerData || {};
             records = payload.records || [];
+            lastRemovedRecord = null;
+            lastRemovedIndex = null;
+            editingRecordIndex = null;
 
             const players = payload.players && payload.players.length ? payload.players : Object.keys(playerData);
             if (players.length > 0) {
@@ -269,6 +358,7 @@
 
         updateNavMessage("スパイカー登録完了！ ➔ <span>【1. スパイカー】</span> を選択してください");
         refreshStatsTable();
+        renderLogs();
         saveData();
     }
 
@@ -329,6 +419,8 @@
             zone: selectedZoneNumber,
             quality: quality
         });
+        lastRemovedRecord = null;
+        lastRemovedIndex = null;
 
         renderLogs();
 
@@ -339,6 +431,95 @@
         clearCourtSelection();
         updateNavMessage("記録完了！ 次の攻撃: <span>【1. スパイカー】</span> を選択してください");
         saveData();
+    }
+
+    function undoLastRecord() {
+        if (!records.length) {
+            alert('取り消す記録がありません。');
+            return;
+        }
+
+        lastRemovedIndex = records.length - 1;
+        lastRemovedRecord = records.pop();
+        rebuildPlayerDataFromRecords();
+        renderLogs();
+        refreshStatsTable();
+        clearCourtSelection();
+        document.querySelectorAll('.btn-player, .btn-quality').forEach(b => b.classList.remove('active'));
+        currentWriterPlayer = "";
+        selectedZoneNumber = "";
+        document.getElementById('volleyballCourt').classList.remove('selectable');
+        updateNavMessage(`直前の記録を取り消しました: <span>【${escapeHtml(lastRemovedRecord.player)}】自陣 ${lastRemovedRecord.zone}（${lastRemovedRecord.quality}）</span>`);
+        saveData();
+    }
+
+    function deleteRecordAt(index) {
+        if (index < 0 || index >= records.length) {
+            alert('削除対象の記録が見つかりません。');
+            return;
+        }
+
+        const target = records[index];
+        const ok = confirm(`この記録を削除しますか？
+【${target.player}】 自陣 ${target.zone}（${target.quality}） [${target.time}]`);
+        if (!ok) return;
+
+        lastRemovedIndex = index;
+        lastRemovedRecord = records.splice(index, 1)[0];
+        rebuildPlayerDataFromRecords();
+        renderLogs();
+        refreshStatsTable();
+        clearCourtSelection();
+        document.querySelectorAll('.btn-player, .btn-quality').forEach(b => b.classList.remove('active'));
+        currentWriterPlayer = "";
+        selectedZoneNumber = "";
+        document.getElementById('volleyballCourt').classList.remove('selectable');
+        updateNavMessage(`記録を削除しました: <span>【${escapeHtml(lastRemovedRecord.player)}】自陣 ${lastRemovedRecord.zone}（${lastRemovedRecord.quality}）</span>`);
+        saveData();
+    }
+
+    function redoLastUndo() {
+        if (!lastRemovedRecord) {
+            alert('戻せる取消データがありません。');
+            return;
+        }
+
+        const insertIndex = (lastRemovedIndex === null || lastRemovedIndex < 0 || lastRemovedIndex > records.length)
+            ? records.length
+            : lastRemovedIndex;
+        records.splice(insertIndex, 0, lastRemovedRecord);
+        rebuildPlayerDataFromRecords();
+        renderLogs();
+        refreshStatsTable();
+        updateNavMessage(`取り消した記録を戻しました: <span>【${escapeHtml(lastRemovedRecord.player)}】自陣 ${lastRemovedRecord.zone}（${lastRemovedRecord.quality}）</span>`);
+        lastRemovedRecord = null;
+        lastRemovedIndex = null;
+        saveData();
+    }
+
+    function rebuildPlayerDataFromRecords() {
+        const players = getPlayersFromInput();
+        const rebuilt = {};
+
+        players.forEach(pName => {
+            rebuilt[pName] = makeEmptyPlayerData();
+        });
+
+        records.forEach(r => {
+            if (!rebuilt[r.player]) {
+                rebuilt[r.player] = makeEmptyPlayerData();
+            }
+            const p = rebuilt[r.player];
+            p.total++;
+            if (r.quality === '強打') p.strong++;
+            if (r.quality === 'ハーフ') p.half++;
+            if (r.quality === 'フェイント') p.feint++;
+            if (!p.zones[r.zone]) p.zones[r.zone] = 0;
+            p.zones[r.zone]++;
+        });
+
+        playerData = rebuilt;
+        renderPlayerButtons(Object.keys(playerData));
     }
 
     function updateSpikeData(player, quality, zoneKey) {
@@ -389,25 +570,209 @@
         });
     }
 
+    function getAllPlayerNames() {
+        const names = new Set([...getPlayersFromInput(), ...Object.keys(playerData)]);
+        records.forEach(r => names.add(r.player));
+        return Array.from(names).filter(Boolean);
+    }
+
+    function populateHistoryFilters() {
+        const playerSelect = document.getElementById('filterPlayer');
+        const zoneSelect = document.getElementById('filterZone');
+        const qualitySelect = document.getElementById('filterQuality');
+        if (!playerSelect || !zoneSelect || !qualitySelect) return;
+
+        const currentPlayer = playerSelect.value;
+        const currentZone = zoneSelect.value;
+        const currentQuality = qualitySelect.value;
+
+        playerSelect.innerHTML = '<option value="">選手：すべて</option>';
+        getAllPlayerNames().forEach(name => {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            playerSelect.appendChild(opt);
+        });
+        playerSelect.value = getAllPlayerNames().includes(currentPlayer) ? currentPlayer : '';
+
+        zoneSelect.innerHTML = '<option value="">コース：すべて</option>';
+        ZONE_OPTIONS.forEach(zone => {
+            const opt = document.createElement('option');
+            opt.value = zone;
+            opt.textContent = zone;
+            zoneSelect.appendChild(opt);
+        });
+        zoneSelect.value = ZONE_OPTIONS.includes(currentZone) ? currentZone : '';
+
+        qualitySelect.innerHTML = '<option value="">質：すべて</option>';
+        QUALITY_OPTIONS.forEach(q => {
+            const opt = document.createElement('option');
+            opt.value = q;
+            opt.textContent = q;
+            qualitySelect.appendChild(opt);
+        });
+        qualitySelect.value = QUALITY_OPTIONS.includes(currentQuality) ? currentQuality : '';
+    }
+
+    function getFilteredRecordIndexes() {
+        const filterPlayer = document.getElementById('filterPlayer')?.value || '';
+        const filterZone = document.getElementById('filterZone')?.value || '';
+        const filterQuality = document.getElementById('filterQuality')?.value || '';
+        const keyword = (document.getElementById('historySearch')?.value || '').trim().toLowerCase();
+
+        const indexes = [];
+        records.forEach((r, i) => {
+            if (filterPlayer && r.player !== filterPlayer) return;
+            if (filterZone && r.zone !== filterZone) return;
+            if (filterQuality && r.quality !== filterQuality) return;
+
+            if (keyword) {
+                const haystack = `${r.time} ${r.player} ${r.zone} ${r.quality} ${formatDateTimeForCSV(r.timestamp)}`.toLowerCase();
+                if (!haystack.includes(keyword)) return;
+            }
+
+            indexes.push(i);
+        });
+
+        return indexes.reverse(); // 新しい記録を上に表示
+    }
+
     function renderLogs() {
-        const logArea = document.getElementById('logArea');
-        logArea.innerHTML = '';
+        populateHistoryFilters();
+
+        const tbody = document.getElementById('historyTableBody');
+        const count = document.getElementById('historyCount');
+        if (!tbody) return;
+
+        tbody.innerHTML = '';
+        const indexes = getFilteredRecordIndexes();
+
+        if (count) {
+            count.textContent = `表示 ${indexes.length} 件 / 全記録 ${records.length} 件`;
+        }
 
         if (!records.length) {
-            const empty = document.createElement('div');
-            empty.className = 'log-item';
-            empty.style.color = 'gray';
-            empty.innerText = 'ここにタップしたデータが蓄積されます';
-            logArea.appendChild(empty);
+            const row = document.createElement('tr');
+            row.innerHTML = '<td colspan="6" style="color:gray;">ここに記録データが表示されます</td>';
+            tbody.appendChild(row);
             return;
         }
 
-        records.slice().reverse().forEach(r => {
-            const newLog = document.createElement('div');
-            newLog.className = 'log-item';
-            newLog.innerText = `[${r.time}] 【${r.player}】 | コース: 自陣 ${r.zone} (${r.quality})`;
-            logArea.appendChild(newLog);
+        if (!indexes.length) {
+            const row = document.createElement('tr');
+            row.innerHTML = '<td colspan="6" style="color:gray;">条件に合う記録がありません</td>';
+            tbody.appendChild(row);
+            return;
+        }
+
+        indexes.forEach(index => {
+            const r = records[index];
+            const row = document.createElement('tr');
+
+            const displayNo = index + 1;
+            row.innerHTML = `
+                <td>${displayNo}</td>
+                <td>${escapeHtml(r.time || '')}</td>
+                <td>${escapeHtml(r.player || '')}</td>
+                <td>${escapeHtml(r.zone || '')}</td>
+                <td>${escapeHtml(r.quality || '')}</td>
+                <td><button class="btn-history-edit" type="button" onclick="startRecordEdit(${index})">編集</button></td>
+            `;
+            tbody.appendChild(row);
         });
+    }
+
+    function startRecordEdit(index) {
+        if (index < 0 || index >= records.length) {
+            alert('編集対象の記録が見つかりません。');
+            return;
+        }
+
+        editingRecordIndex = index;
+        const r = records[index];
+
+        const panel = document.getElementById('editPanel');
+        const label = document.getElementById('editTargetLabel');
+        const playerSelect = document.getElementById('editPlayer');
+        const zoneSelect = document.getElementById('editZone');
+        const qualitySelect = document.getElementById('editQuality');
+
+        playerSelect.innerHTML = '';
+        const players = getAllPlayerNames();
+        if (!players.includes(r.player)) players.push(r.player);
+        players.forEach(name => {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            playerSelect.appendChild(opt);
+        });
+
+        zoneSelect.innerHTML = '';
+        ZONE_OPTIONS.forEach(zone => {
+            const opt = document.createElement('option');
+            opt.value = zone;
+            opt.textContent = zone;
+            zoneSelect.appendChild(opt);
+        });
+
+        qualitySelect.innerHTML = '';
+        QUALITY_OPTIONS.forEach(q => {
+            const opt = document.createElement('option');
+            opt.value = q;
+            opt.textContent = q;
+            qualitySelect.appendChild(opt);
+        });
+
+        playerSelect.value = r.player;
+        zoneSelect.value = r.zone;
+        qualitySelect.value = r.quality;
+
+        label.textContent = `No.${index + 1} / ${r.time} / 現在: ${r.player}・${r.zone}・${r.quality}`;
+        panel.classList.add('active');
+        panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function saveRecordEdit() {
+        if (editingRecordIndex === null || editingRecordIndex < 0 || editingRecordIndex >= records.length) {
+            alert('編集中の記録が見つかりません。');
+            return;
+        }
+
+        const player = document.getElementById('editPlayer').value;
+        const zone = document.getElementById('editZone').value;
+        const quality = document.getElementById('editQuality').value;
+
+        if (!player || !zone || !quality) {
+            alert('選手・コース・質をすべて選んでください。');
+            return;
+        }
+
+        const oldRecord = records[editingRecordIndex];
+        records[editingRecordIndex] = {
+            ...oldRecord,
+            player: player,
+            zone: zone,
+            quality: quality,
+            editedAt: new Date().toISOString()
+        };
+
+        lastRemovedRecord = null;
+        lastRemovedIndex = null;
+        rebuildPlayerDataFromRecords();
+        refreshStatsTable();
+        renderLogs();
+        cancelRecordEdit(false);
+        updateNavMessage(`記録を修正しました: <span>【${escapeHtml(player)}】自陣 ${zone}（${quality}）</span>`);
+        saveData();
+    }
+
+    function cancelRecordEdit(showMessage = true) {
+        editingRecordIndex = null;
+        const panel = document.getElementById('editPanel');
+        if (panel) panel.classList.remove('active');
+        if (showMessage) {
+            updateNavMessage("編集をキャンセルしました。次の攻撃: <span>【1. スパイカー】</span> を選択してください");
+        }
     }
 
     function buildCSV() {
@@ -469,6 +834,10 @@
         currentWriterPlayer = "";
         selectedZoneNumber = "";
         records = [];
+        lastRemovedRecord = null;
+        lastRemovedIndex = null;
+        editingRecordIndex = null;
+        cancelRecordEdit(false);
 
         const players = getPlayersFromInput();
         playerData = {};
