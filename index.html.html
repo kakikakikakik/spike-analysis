@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>スパイク分析</title>
+
+    <!-- ★ iOS（iPhone/iPad）アプリ化のための設定 -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="スパイク分析">
+    <!-- アプリのアイコン画像（バレーボールの絵文字をアイコン代わりに設定） -->
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏐</text></svg>">
+
+    <style>
+        body { 
+            font-family: sans-serif; margin: 0; padding: 10px; background: #f0f2f5; user-select: none; 
+            /* iOS特有のタップ時の青いハイライトを消す */
+            -webkit-tap-highlight-color: transparent;
+        }
+        /* iOSのノッチ（画面上部の凹み）対策 */
+        .container { 
+            display: flex; flex-direction: column; gap: 12px; max-width: 800px; margin: 0 auto;
+            padding-top: env(safe-area-inset-top);
+        }
+        
+        /* 設定エリア */
+        .setup-card { background: #e9ecef; padding: 12px; border-radius: 8px; border: 1px solid #ced4da; }
+        .setup-input { width: 70%; padding: 8px; font-size: 14px; border-radius: 4px; border: 1px solid #ccc; box-sizing: border-box; }
+        .btn-setup { width: 25%; padding: 8px; background: #6c757d; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; }
+
+
+        .data-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+        .btn-small { padding: 9px 10px; font-size: 13px; min-width: 90px; flex: 1; }
+        .btn-export { background: #0d6efd; color: white; }
+        .btn-reset { background: #dc3545; color: white; }
+        .save-status { font-size: 12px; color: #495057; margin-top: 6px; }
+
+        /* ナビゲーションインジケーター */
+        .nav-status { background: #343a40; color: white; padding: 10px; border-radius: 6px; text-align: center; font-weight: bold; font-size: 15px; }
+        .nav-status span { color: #ffc107; }
+
+        /* コントロールエリア */
+        .controls { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .btn-group { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+        button { padding: 12px 15px; font-size: 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; flex: 1; min-width: 60px; }
+        
+        /* 登録されたスパイカーボタン */
+        .btn-player { background: #f8f9fa; color: #333; border: 2px solid #ccc; }
+        .btn-player.active { background: #dc3545; color: white; border-color: #bd2130; outline: 3px solid #ffc107; }
+        
+        /* スパイクの質ボタン */
+        .btn-quality { background: #e0e0e0; color: #333; }
+        .btn-quality.active { background: #28a745; color: white; }
+        
+        /* バレーコート（自陣のみ） */
+        .court-container { display: flex; justify-content: center; }
+        .court-figure { display: flex; flex-direction: column; align-items: center; }
+        .net-label { font-size: 14px; font-weight: bold; color: #333; margin-bottom: 4px; }
+        .net-visual {
+            width: 320px; display: flex; align-items: flex-end; justify-content: center;
+            gap: 0; margin-bottom: 8px;
+        }
+        .net-post {
+            width: 8px; height: 28px; background: #6c757d; border-radius: 3px 3px 0 0;
+            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25);
+        }
+        .net-mesh {
+            width: 300px; height: 18px; border-top: 3px solid #f8f9fa; border-bottom: 2px solid #adb5bd;
+            background-image:
+                linear-gradient(to right, rgba(255,255,255,0.85) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255,255,255,0.6) 1px, transparent 1px);
+            background-size: 12px 100%, 100% 6px;
+            background-color: #ced4da;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+        }
+        .court {
+            width: 300px; height: 300px; background: #de7a4e; border: 4px solid white;
+            position: relative; box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+        .court.selectable .zone { border: 2px solid #ffc107; background: rgba(255, 193, 7, 0.1); }
+        
+        .team-side { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); height: 100%; }
+        .zone { 
+            border: 1px dashed rgba(255,255,255,0.5); display: flex; 
+            align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 15px;
+            cursor: pointer; transition: background 0.1s;
+        }
+        .zone.active { background: #ffc107 !important; color: #333; }
+        .zone:active { background: rgba(255, 255, 255, 0.4); color: #333; }
+        
+        /* リアルタイム分析セクション */
+        .analyst-card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .stats-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+        .stats-table th, .stats-table td { border: 1px solid #ddd; padding: 6px; text-align: center; }
+        .stats-table th { background-color: #f8f9fa; }
+
+        /* ログ表示エリア */
+        .log-area { background: white; padding: 15px; border-radius: 8px; height: 120px; overflow-y: auto; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .log-item { padding: 6px 0; border-bottom: 1px solid #eee; font-family: monospace; font-size: 13px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    
+    <!-- 試合前：選手一括登録エリア -->
+    <div class="setup-card">
+        <p style="margin:0 0 5px 0; font-weight:bold; font-size:14px;">⚙️ スパイク分析：相手スパイカーリスト事前登録</p>
+        <div style="display: flex; justify-content: space-between;">
+            <input type="text" id="playerSetupInput" class="setup-input" value="エースA, レフト, 5番, ポニーテール, 黒T">
+            <button class="btn-setup" onclick="registerPlayers()">登録</button>
+        </div>
+        <div class="data-actions">
+            <button class="btn-small btn-export" onclick="exportCSV()">CSV出力</button>
+            <button class="btn-small" onclick="copyCSVToClipboard()">CSVコピー</button>
+            <button class="btn-small btn-reset" onclick="resetAllData()">全消去</button>
+        </div>
+        <div class="save-status" id="saveStatus">未保存</div>
+    </div>
+    
+    <!-- 現在の入力ステップの案内板 -->
+    <div class="nav-status" id="navStatus">
+        次の手順: <span>【1. 打ったスパイカー】</span> を選んでください
+    </div>
+
+    <div class="controls">
+        <!-- 手順①: スパイカー選択 -->
+        <p style="margin:0 0 8px 0; font-weight:bold;">1. 打ったスパイカー(選手)を選択</p>
+        <div class="btn-group" id="playerButtonsContainer"></div>
+    </div>
+
+    <!-- 手順②: コートタップ（自陣） -->
+    <p style="margin:0; font-weight:bold;">2. 自陣コートの落ちた（触った）位置をタップ</p>
+    <div class="court-container" style="margin-top: 20px; margin-bottom: 10px;">
+        <div class="court-figure">
+            <div class="net-label">↑ ネット側</div>
+            <div class="net-visual" aria-hidden="true">
+                <div class="net-post"></div>
+                <div class="net-mesh"></div>
+                <div class="net-post"></div>
+            </div>
+            <div class="court" id="volleyballCourt">
+                <div class="team-side" id="homeSide">
+                    <div class="zone" data-zone="FL">FL</div><div class="zone" data-zone="FC">FC</div><div class="zone" data-zone="FR">FR</div>
+                    <div class="zone" data-zone="ML">ML</div><div class="zone" data-zone="MC">MC</div><div class="zone" data-zone="MR">MR</div>
+                    <div class="zone" data-zone="BL">BL</div><div class="zone" data-zone="BC">BC</div><div class="zone" data-zone="BR">BR</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <!-- 手順③: スパイクの質（トリガー） -->
+        <p style="margin:5px 0 8px 0; font-weight:bold;">3. スパイクの質を選択して記録完了</p>
+        <div class="btn-group">
+            <button class="btn-quality" onclick="selectQuality('強打')">💥 強打</button>
+            <button class="btn-quality" onclick="selectQuality('ハーフ')">🎯 ハーフ</button>
+            <button class="btn-quality" onclick="selectQuality('フェイント')">👌 フェイント</button>
+        </div>
+    </div>
+
+    <!-- リアルタイム分析ダッシュボード -->
+    <div class="analyst-card">
+        <p style="margin:0 0 5px 0; font-weight:bold; color: #dc3545;">📊 スパイカー別 自陣の狙われやすいコース統計</p>
+        <table class="stats-table">
+            <thead>
+                <tr>
+                    <th>選手名/特徴</th>
+                    <th>スパイク総数</th>
+                    <th>質の割合（強打 / ハーフ / フェ）</th>
+                    <th>自陣の主な被弾コース（上位2箇所）</th>
+                </tr>
+            </thead>
+            <tbody id="statsTableBody"></tbody>
+        </table>
+    </div>
+
+    <div>
+        <p style="margin:0 0 5px 0; font-weight:bold;">3. 記録データ履歴</p>
+        <div class="log-area" id="logArea">
+            <div class="log-item" style="color:gray;">ここにタップしたデータが蓄積されます</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const STORAGE_KEY = 'spikeAnalysis_savedData_v1';
+
+    let currentWriterPlayer = "";
+    let selectedZoneNumber = "";
+    let playerData = {};
+    let records = [];
+
+    function makeEmptyPlayerData() {
+        return { total: 0, strong: 0, half: 0, feint: 0, zones: {} };
+    }
+
+    function updateNavMessage(msg) {
+        document.getElementById('navStatus').innerHTML = msg;
+    }
+
+    function updateSaveStatus(msg) {
+        const status = document.getElementById('saveStatus');
+        if (!status) return;
+        const now = new Date();
+        const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+        status.textContent = `${msg}（${timeStr}）`;
+    }
+
+    function getPlayersFromInput() {
+        const inputVal = document.getElementById('playerSetupInput').value;
+        return inputVal.split(',').map(p => p.trim()).filter(p => p !== '');
+    }
+
+    function saveData() {
+        try {
+            const payload = {
+                version: 1,
+                savedAt: new Date().toISOString(),
+                players: Object.keys(playerData),
+                playerData: playerData,
+                records: records
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+            updateSaveStatus('自動保存済み');
+        } catch (e) {
+            updateSaveStatus('保存できませんでした');
+            alert('保存に失敗しました。Safariのプライベートブラウズや容量制限が原因の可能性があります。');
+        }
+    }
+
+    function loadSavedData() {
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (!raw) return false;
+
+            const payload = JSON.parse(raw);
+            playerData = payload.playerData || {};
+            records = payload.records || [];
+
+            const players = payload.players && payload.players.length ? payload.players : Object.keys(playerData);
+            if (players.length > 0) {
+                document.getElementById('playerSetupInput').value = players.join(', ');
+            }
+
+            renderPlayerButtons(players);
+            renderLogs();
+            refreshStatsTable();
+            updateNavMessage("保存データを復元しました。次の攻撃: <span>【1. スパイカー】</span> を選択してください");
+            updateSaveStatus('保存データを復元');
+            return true;
+        } catch (e) {
+            console.error(e);
+            return false;
+        }
+    }
+
+    function registerPlayers() {
+        const players = getPlayersFromInput();
+        const newPlayerData = {};
+
+        players.forEach(pName => {
+            newPlayerData[pName] = playerData[pName] || makeEmptyPlayerData();
+        });
+
+        playerData = newPlayerData;
+        renderPlayerButtons(players);
+
+        updateNavMessage("スパイカー登録完了！ ➔ <span>【1. スパイカー】</span> を選択してください");
+        refreshStatsTable();
+        saveData();
+    }
+
+    function renderPlayerButtons(players) {
+        const container = document.getElementById('playerButtonsContainer');
+        container.innerHTML = '';
+
+        players.forEach(pName => {
+            if (!playerData[pName]) {
+                playerData[pName] = makeEmptyPlayerData();
+            }
+
+            const btn = document.createElement('button');
+            btn.className = 'btn-player';
+            btn.innerText = pName;
+            btn.onclick = function() { selectPlayer(pName, btn); };
+            container.appendChild(btn);
+        });
+    }
+
+    function selectPlayer(pName, element) {
+        document.querySelectorAll('.btn-player').forEach(b => b.classList.remove('active'));
+        element.classList.add('active');
+        currentWriterPlayer = pName;
+        clearCourtSelection();
+        selectedZoneNumber = "";
+        document.getElementById('volleyballCourt').classList.add('selectable');
+        updateNavMessage(`選択中: <span>【${escapeHtml(currentWriterPlayer)}】</span> ➔ 2. 自陣の 【コース位置】 をタップ！`);
+    }
+
+    document.getElementById('volleyballCourt').addEventListener('click', function(e) {
+        const zoneElement = e.target.closest('.zone');
+        if (!zoneElement) return;
+        if (!currentWriterPlayer) return;
+
+        clearCourtSelection();
+        zoneElement.classList.add('active');
+        selectedZoneNumber = zoneElement.getAttribute('data-zone');
+        updateNavMessage(`選択中: <span>【${escapeHtml(currentWriterPlayer)}】➔【自陣 ${selectedZoneNumber}】</span> ➔ 3. 【スパイクの質】 を選択！`);
+    });
+
+    function clearCourtSelection() {
+        document.querySelectorAll('.zone').forEach(z => z.classList.remove('active'));
+    }
+
+    function selectQuality(quality) {
+        if (!currentWriterPlayer || !selectedZoneNumber) return;
+
+        const now = new Date();
+        const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+
+        updateSpikeData(currentWriterPlayer, quality, selectedZoneNumber);
+
+        records.push({
+            timestamp: now.toISOString(),
+            time: timeStr,
+            player: currentWriterPlayer,
+            zone: selectedZoneNumber,
+            quality: quality
+        });
+
+        renderLogs();
+
+        currentWriterPlayer = "";
+        selectedZoneNumber = "";
+        document.querySelectorAll('.btn-player, .btn-quality').forEach(b => b.classList.remove('active'));
+        document.getElementById('volleyballCourt').classList.remove('selectable');
+        clearCourtSelection();
+        updateNavMessage("記録完了！ 次の攻撃: <span>【1. スパイカー】</span> を選択してください");
+        saveData();
+    }
+
+    function updateSpikeData(player, quality, zoneKey) {
+        if (!playerData[player]) playerData[player] = makeEmptyPlayerData();
+        const p = playerData[player];
+
+        p.total++;
+        if (quality === '強打') p.strong++;
+        if (quality === 'ハーフ') p.half++;
+        if (quality === 'フェイント') p.feint++;
+        if (!p.zones[zoneKey]) p.zones[zoneKey] = 0;
+        p.zones[zoneKey]++;
+        refreshStatsTable();
+    }
+
+    function refreshStatsTable() {
+        const tbody = document.getElementById('statsTableBody');
+        tbody.innerHTML = '';
+
+        Object.keys(playerData).forEach(pName => {
+            const data = playerData[pName];
+
+            if (data.total === 0) {
+                const row = document.createElement('tr');
+                row.innerHTML = `<td style="font-weight:bold;">${escapeHtml(pName)}</td><td>0 回</td><td>-</td><td>-</td>`;
+                tbody.appendChild(row);
+                return;
+            }
+
+            const strongPct = Math.round((data.strong / data.total) * 100);
+            const halfPct = Math.round((data.half / data.total) * 100);
+            const feintPct = Math.round((data.feint / data.total) * 100);
+            const sortedZones = Object.keys(data.zones).sort((a, b) => data.zones[b] - data.zones[a]);
+
+            let topCourses = "-";
+            if (sortedZones.length > 0) {
+                topCourses = sortedZones.slice(0, 2).map(z => `${z}(${data.zones[z]})`).join(', ');
+            }
+
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td style="font-weight:bold; padding:8px 0;">${escapeHtml(pName)}</td>
+                <td><strong>${data.total}</strong> 回</td>
+                <td><small>強:${strongPct}%/ハ:${halfPct}%/フェ:${feintPct}%</small></td>
+                <td style="color:#bd2130; font-weight:bold;"><small>${topCourses}</small></td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+
+    function renderLogs() {
+        const logArea = document.getElementById('logArea');
+        logArea.innerHTML = '';
+
+        if (!records.length) {
+            const empty = document.createElement('div');
+            empty.className = 'log-item';
+            empty.style.color = 'gray';
+            empty.innerText = 'ここにタップしたデータが蓄積されます';
+            logArea.appendChild(empty);
+            return;
+        }
+
+        records.slice().reverse().forEach(r => {
+            const newLog = document.createElement('div');
+            newLog.className = 'log-item';
+            newLog.innerText = `[${r.time}] 【${r.player}】 | コース: 自陣 ${r.zone} (${r.quality})`;
+            logArea.appendChild(newLog);
+        });
+    }
+
+    function buildCSV() {
+        const header = ['日時', '時刻', '選手', '自陣コース', 'スパイクの質'];
+        const rows = records.map(r => [
+            formatDateTimeForCSV(r.timestamp),
+            r.time,
+            r.player,
+            r.zone,
+            r.quality
+        ]);
+
+        return [header, ...rows].map(row => row.map(csvEscape).join(',')).join('\n');
+    }
+
+    function exportCSV() {
+        if (!records.length) {
+            alert('まだ記録データがありません。');
+            return;
+        }
+
+        const csv = '\uFEFF' + buildCSV(); // Excelで日本語が文字化けしにくいようBOMを付ける
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+
+        const now = new Date();
+        const fileName = `spike_analysis_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}.csv`;
+
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        updateSaveStatus('CSV出力済み');
+    }
+
+    async function copyCSVToClipboard() {
+        if (!records.length) {
+            alert('まだ記録データがありません。');
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(buildCSV());
+            updateSaveStatus('CSVをコピー済み');
+            alert('CSV形式のデータをコピーしました。NumbersやExcelに貼り付けできます。');
+        } catch (e) {
+            alert('コピーできませんでした。CSV出力ボタンを使ってください。');
+        }
+    }
+
+    function resetAllData() {
+        const ok = confirm('記録データと集計をすべて消去します。よろしいですか？');
+        if (!ok) return;
+
+        localStorage.removeItem(STORAGE_KEY);
+        currentWriterPlayer = "";
+        selectedZoneNumber = "";
+        records = [];
+
+        const players = getPlayersFromInput();
+        playerData = {};
+        players.forEach(pName => {
+            playerData[pName] = makeEmptyPlayerData();
+        });
+
+        renderPlayerButtons(players);
+        renderLogs();
+        refreshStatsTable();
+        clearCourtSelection();
+        document.getElementById('volleyballCourt').classList.remove('selectable');
+        updateNavMessage("データを消去しました。次の手順: <span>【1. 打ったスパイカー】</span> を選んでください");
+        saveData();
+    }
+
+    function csvEscape(value) {
+        const str = String(value ?? '');
+        if (/[",\n\r]/.test(str)) {
+            return '"' + str.replace(/"/g, '""') + '"';
+        }
+        return str;
+    }
+
+    function formatDateTimeForCSV(isoString) {
+        if (!isoString) return '';
+        const d = new Date(isoString);
+        if (Number.isNaN(d.getTime())) return '';
+        return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+    }
+
+    function escapeHtml(str) {
+        return String(str).replace(/[&<>"']/g, function(match) {
+            return ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            })[match];
+        });
+    }
+
+    window.onload = function() {
+        const restored = loadSavedData();
+        if (!restored) {
+            registerPlayers();
+        }
+    };
+</script>
+</body>
+</html>
